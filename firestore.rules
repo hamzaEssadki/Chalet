@@ -1,0 +1,25 @@
+rules_version = '2';
+// ⚙️ Remplace ADMIN_UID par ton UID (étape 3 du guide).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'QBDMVYl1WmRdaA19FonQDluvXjF2';
+    }
+
+    // Tout le monde peut voir ; seul l'organisateur peut modifier.
+    match /trip/{id}     { allow read: if true; allow write: if isAdmin(); }
+    match /people/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /expenses/{id} { allow read: if true; allow write: if isAdmin(); }
+
+    // Jetons de notification : chaque téléphone peut s'inscrire,
+    // mais personne ne peut lire la liste (sauf l'organisateur).
+    match /tokens/{token} {
+      allow create, update: if request.resource.data.keys().hasOnly(['token', 'who', 'createdAt'])
+                            && request.resource.data.token == token
+                            && token.size() < 500
+                            && request.resource.data.who is string
+                            && request.resource.data.who.size() <= 40;
+      allow read, delete: if isAdmin();
+    }
+  }
+}

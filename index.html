@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cagnotte du chalet</title>
+<meta name="theme-color" content="#1f5a3d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Chalet">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root{
+  --bg:#f3f6f2; --surface:#fff; --line:#dbe3da; --fg:#1b2a22; --muted:#5d6e64;
+  --pine:#1f5a3d; --pine-ink:#fff; --amber:#c9850f; --amber-soft:#fbf0d9;
+  --ok:#2e7d4f; --ok-soft:#e1f2e7; --bad:#b3261e; --bad-soft:#fbe4e2;
+  --display:"Bricolage Grotesque",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#101814; --surface:#17221c; --line:#2a3a31; --fg:#e6eee8; --muted:#9db0a4;
+  --pine:#5fb88a; --pine-ink:#0d1712; --amber:#f0b34a; --amber-soft:#3a2e15;
+  --ok:#6fcf97; --ok-soft:#173326; --bad:#ff8a80; --bad-soft:#3d1c1a; color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);
+  padding:calc(12px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2{font-family:var(--display);text-wrap:balance;margin:0}
+h1{font-size:1.9rem;font-weight:800;line-height:1.1}
+h2{font-size:1.15rem;font-weight:600}
+.eyebrow{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+header.top{display:flex;flex-direction:column;gap:6px}
+.sub{color:var(--muted)}
+.clock{background:var(--pine);color:var(--pine-ink);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.clock .digits{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.clock .digits b{display:block;font-family:var(--mono);font-size:1.8rem;line-height:1}
+.clock .digits span{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;opacity:.8}
+.clock.expired{background:var(--bad);color:#fff}
+.bar{height:8px;border-radius:99px;background:rgba(255,255,255,.25);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--amber);transition:width .4s}
+.alert{background:var(--bad-soft);border:1px solid var(--bad);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.alert strong{color:var(--bad)}
+.banner{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;position:sticky;top:env(safe-area-inset-top);z-index:5}
+body.ro .tabs{grid-template-columns:repeat(2,1fr)}
+.tabs button{border:0;background:none;color:var(--muted);font:600 .9rem var(--body);padding:9px 4px;border-radius:9px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--pine);color:var(--pine-ink)}
+.panel{display:flex;flex-direction:column;gap:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0}
+.stat b{display:block;font-family:var(--mono);font-size:1rem;overflow-wrap:anywhere}
+.stat small{color:var(--muted);font-size:.75rem}
+ul.list{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+ul.list li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line)}
+ul.list li:first-child{border-top:0}
+.name{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:500}
+.pill{font-size:.75rem;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.no{background:var(--amber-soft);color:var(--amber)}
+.pill.late{background:var(--bad-soft);color:var(--bad)}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 .88rem var(--body);padding:9px 12px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.primary{background:var(--pine);border-color:var(--pine);color:var(--pine-ink)}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.5}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.icon{border:0;background:none;color:var(--muted);cursor:pointer;font-size:1.1rem;padding:4px 6px}
+form.row{display:flex;gap:8px}
+form.row input{flex:1;min-width:0}
+input,select{font:16px var(--body);padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);width:100%}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--pine);flex:none}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:.82rem;font-weight:600;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.scan img{max-height:220px;object-fit:contain;border-radius:8px;align-self:center;max-width:100%}
+.empty{color:var(--muted);padding:16px;text-align:center;background:var(--surface);border:1px dashed var(--line);border-radius:12px}
+.exp-amt{text-align:right;font-family:var(--mono)}
+.exp-amt small{display:block;color:var(--muted);font-size:.75rem}
+.confirm{display:flex;gap:6px;flex-wrap:wrap}
+.note{font-size:.82rem;color:var(--muted);margin:0}
+textarea{width:100%;font:14px var(--body);padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:10px;font-weight:600;font-size:.88rem;z-index:20;max-width:calc(100% - 32px)}
+body.ro .edit{display:none!important}
+.foot{text-align:center}
+.foot button{background:none;border:0;color:var(--muted);font:.8rem var(--body);text-decoration:underline;cursor:pointer}
+[hidden]{display:none!important}
+</style>
+</head>
+<body class="ro">
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow" id="tripMeta">Voyage de groupe</div>
+    <h1 id="tripName">Cagnotte du chalet</h1>
+    <div class="sub" id="tripSub">Chargement…</div>
+  </header>
+
+  <section class="clock" id="clock" aria-live="polite">
+    <div class="eyebrow" style="color:inherit;opacity:.85" id="clockLabel">Date limite de paiement</div>
+    <div class="digits">
+      <div><b id="dD">–</b><span>jours</span></div>
+      <div><b id="dH">–</b><span>heures</span></div>
+      <div><b id="dM">–</b><span>min</span></div>
+      <div><b id="dS">–</b><span>sec</span></div>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="paidBar" style="width:0%"></i></div>
+    <div id="clockFoot" style="font-size:.85rem">0 payé sur 0</div>
+  </section>
+
+  <section class="alert" id="alert" hidden>
+    <div><strong>Délai expiré.</strong> <span id="alertText"></span></div>
+    <textarea id="alertMsg" rows="3" readonly aria-label="Message de rappel"></textarea>
+    <div><button class="btn" id="copyAlert" type="button">Copier le rappel</button></div>
+  </section>
+
+  <!-- Installation / notifications -->
+  <section class="banner" id="installBox" hidden>
+    <strong>Installe l'app sur ton iPhone</strong>
+    <p class="note">Dans Safari, touche le bouton Partager <b>⎋</b>, puis « Sur l'écran d'accueil ». Ouvre ensuite l'app depuis l'icône pour activer les notifications.</p>
+  </section>
+  <section class="banner" id="notifBox" hidden>
+    <strong>Recevoir les rappels de paiement</strong>
+    <div class="field"><label for="whoSel">Je suis</label><select id="whoSel"><option value="">— choisis ton nom —</option></select></div>
+    <button class="btn primary" id="notifBtn" type="button">Activer les notifications</button>
+    <p class="note" id="notifNote"></p>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="t-pay" aria-selected="true" data-tab="pay">Paiements</button>
+    <button role="tab" id="t-exp" aria-selected="false" data-tab="exp">Dépenses</button>
+    <button role="tab" id="t-set" aria-selected="false" data-tab="set" class="edit">Réglages</button>
+  </nav>
+
+  <section class="panel" id="p-pay">
+    <div class="stats">
+      <div class="stat"><small>Par personne</small><b id="sPer">0 $</b></div>
+      <div class="stat"><small>Reçu</small><b id="sGot">0 $</b></div>
+      <div class="stat"><small>Manquant</small><b id="sMiss">0 $</b></div>
+    </div>
+    <form class="row edit" id="addPerson">
+      <input id="newPerson" placeholder="Ajouter un ami" maxlength="40" autocomplete="off">
+      <button class="btn primary" type="submit">Ajouter</button>
+    </form>
+    <ul class="list" id="people" hidden></ul>
+    <div class="empty" id="peopleEmpty">La liste du groupe apparaîtra ici dès que l'organisateur l'aura remplie.</div>
+  </section>
+
+  <section class="panel" id="p-exp" hidden>
+    <div class="card scan edit">
+      <h2>Ajouter une facture</h2>
+      <p class="note" id="scanNote">Prends une photo : l'IA lit le total et le divise entre toutes les personnes.</p>
+      <div class="confirm">
+        <label class="btn primary">📷 Photo de la facture<input type="file" id="photo" accept="image/*" capture="environment" hidden></label>
+        <button class="btn" type="button" id="manual">Saisir à la main</button>
+      </div>
+      <img id="preview" alt="Aperçu de la facture" hidden>
+      <p class="note" id="scanStatus" hidden></p>
+      <div id="scanResult" class="panel" hidden>
+        <div class="grid2">
+          <div class="field"><label for="eLabel">Commerce / description</label><input id="eLabel"></div>
+          <div class="field"><label for="eTotal">Total ($)</label><input id="eTotal" type="number" step="0.01" min="0" inputmode="decimal"></div>
+        </div>
+        <div class="field"><label for="ePayer">Payé par</label><input id="ePayer" list="peopleNames" placeholder="Qui a avancé l'argent?"></div>
+        <datalist id="peopleNames"></datalist>
+        <p class="note" id="splitPreview"></p>
+        <button class="btn primary" id="saveExpense" type="button">Ajouter la dépense</button>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><small>Dépenses</small><b id="eSum">0 $</b></div>
+      <div class="stat"><small>Personnes</small><b id="eCount">0</b></div>
+      <div class="stat"><small>Part chacun</small><b id="eShare">0 $</b></div>
+    </div>
+    <ul class="list" id="expenses" hidden></ul>
+    <div class="empty" id="expEmpty">Aucune dépense pour l'instant.</div>
+  </section>
+
+  <section class="panel edit" id="p-set" hidden>
+    <form class="card" id="tripForm">
+      <h2>Le voyage</h2>
+      <div class="field"><label for="fName">Nom</label><input id="fName" maxlength="60" placeholder="Chalet entre amis"></div>
+      <div class="field"><label for="fPlace">Lieu et dates</label><input id="fPlace" maxlength="80" placeholder="Mont-Tremblant, 14–16 nov."></div>
+      <div class="grid2">
+        <div class="field"><label for="fAmount">Montant par personne ($)</label><input id="fAmount" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label for="fDeadline">Date limite</label><input id="fDeadline" type="datetime-local"></div>
+      </div>
+      <div class="field"><label for="fInterac">Courriel Interac pour les paiements (optionnel)</label><input id="fInterac" type="email" maxlength="80"></div>
+      <button class="btn primary" type="submit">Enregistrer</button>
+    </form>
+    <div class="card">
+      <h2>Lecture des factures (IA)</h2>
+      <p class="note">Colle ta clé API Anthropic. Elle reste seulement sur ce téléphone et n'est jamais envoyée à tes amis.</p>
+      <div class="field"><label for="apiKey">Clé API</label><input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-…"></div>
+      <button class="btn" id="saveKey" type="button">Enregistrer la clé</button>
+    </div>
+    <button class="btn" id="logout" type="button">Se déconnecter (admin)</button>
+  </section>
+
+  <section class="card" id="loginBox" hidden>
+    <h2>Connexion organisateur</h2>
+    <form id="loginForm" class="panel">
+      <div class="field"><label for="lEmail">Courriel</label><input id="lEmail" type="email" autocomplete="username"></div>
+      <div class="field"><label for="lPass">Mot de passe</label><input id="lPass" type="password" autocomplete="current-password"></div>
+      <button class="btn primary" type="submit">Se connecter</button>
+      <p class="note" id="loginErr"></p>
+    </form>
+  </section>
+  <div class="foot"><button type="button" id="adminLink">Accès organisateur</button></div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
+import { firebaseConfig, vapidKey } from "./config.js";
+
+const $ = s => document.querySelector(s);
+const fmt = n => new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(n||0);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = { get:k=>{try{return localStorage.getItem(k)}catch(e){return null}}, set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}} };
+function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2600)}
+
+if (firebaseConfig.apiKey === "COLLE_ICI") {
+  $('#tripSub').textContent = "Configuration manquante : remplis config.js (étape 2 du guide).";
+  throw new Error("config.js non rempli");
+}
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+let canEdit=false, trip={}, people=[], expenses=[], pendingDel=null;
+
+// ---------- Onglets ----------
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  ['pay','exp','set'].forEach(k=>$('#p-'+k).hidden = k!==b.dataset.tab);
+  store.set('tab',b.dataset.tab);
+});
+
+// ---------- Admin ----------
+$('#adminLink').onclick=()=>{ $('#loginBox').hidden=!$('#loginBox').hidden; if(!$('#loginBox').hidden) $('#lEmail').focus(); };
+$('#loginForm').onsubmit=async e=>{
+  e.preventDefault(); $('#loginErr').textContent='';
+  try{ await signInWithEmailAndPassword(auth,$('#lEmail').value.trim(),$('#lPass').value); $('#loginBox').hidden=true; toast('Connecté comme organisateur'); }
+  catch(err){ $('#loginErr').textContent='Courriel ou mot de passe invalide.'; }
+};
+$('#logout').onclick=async()=>{ await signOut(auth); $('#t-pay').click(); toast('Déconnecté'); };
+onAuthStateChanged(auth,u=>{
+  canEdit=!!u;
+  document.body.classList.toggle('ro',!canEdit);
+  $('#adminLink').hidden=canEdit;
+  if(canEdit){ const t=store.get('tab'); if(t) $('#t-'+t)?.click(); } else if(!$('#p-set').hidden) $('#t-pay').click();
+  $('#apiKey').value=store.get('anthropicKey')||'';
+  render();
+});
+function guard(){ if(!canEdit){toast("Seul l'organisateur peut modifier");return false} return true }
+
+// ---------- Données en direct ----------
+const onErr = () => toast('Connexion perdue — vérifie Internet');
+onSnapshot(doc(db,'trip','main'), s=>{trip=s.exists()?s.data():{};render()}, onErr);
+onSnapshot(query(collection(db,'people'),orderBy('createdAt')), s=>{people=s.docs.map(d=>({id:d.id,...d.data()}));render()}, onErr);
+onSnapshot(query(collection(db,'expenses'),orderBy('createdAt','desc')), s=>{expenses=s.docs.map(d=>({id:d.id,...d.data()}));render()}, onErr);
+
+// ---------- Compte à rebours ----------
+const deadline = () => trip.deadline ? new Date(trip.deadline) : null;
+function namesList(names){ return names.length>1 ? names.slice(0,-1).join(', ')+' et '+names.at(-1) : names[0]; }
+function tick(){
+  const d=deadline(), unpaid=people.filter(p=>!p.paid);
+  if(!d){ ['dD','dH','dM','dS'].forEach(i=>$('#'+i).textContent='–'); $('#clockLabel').textContent='Date limite pas encore fixée'; $('#clock').classList.remove('expired'); $('#alert').hidden=true; return; }
+  let ms=d-Date.now(); const expired=ms<=0; ms=Math.max(0,ms);
+  $('#dD').textContent=Math.floor(ms/864e5);
+  $('#dH').textContent=String(Math.floor(ms/36e5)%24).padStart(2,'0');
+  $('#dM').textContent=String(Math.floor(ms/6e4)%60).padStart(2,'0');
+  $('#dS').textContent=String(Math.floor(ms/1e3)%60).padStart(2,'0');
+  const when=d.toLocaleString('fr-CA',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
+  $('#clockLabel').textContent = expired ? 'Délai expiré — '+when : 'Payer '+fmt(trip.amount)+' avant le '+when;
+  const show = expired && unpaid.length>0;
+  $('#clock').classList.toggle('expired',show);
+  $('#alert').hidden=!show;
+  if(show){
+    const list=namesList(unpaid.map(p=>p.name)), verb=unpaid.length>1?"n'ont":"n'a";
+    $('#alertText').textContent=`${list} ${verb} pas encore payé ${fmt(trip.amount)}.`;
+    const msg=`⏰ Rappel ${trip.name||'chalet'} : la date limite est passée. ${list} ${verb} pas payé la somme de ${fmt(trip.amount)}. Veuillez faire le paiement le plus tôt possible${trip.interac?' (Interac : '+trip.interac+')':''}. Merci!`;
+    if($('#alertMsg').value!==msg) $('#alertMsg').value=msg;
+  }
+}
+setInterval(tick,1000);
+$('#copyAlert').onclick=async()=>{ const t=$('#alertMsg'); try{await navigator.clipboard.writeText(t.value);toast('Rappel copié')}catch(e){t.select();toast('Texte sélectionné')} };
+
+// ---------- Affichage ----------
+function render(){
+  $('#tripName').textContent=trip.name||'Cagnotte du chalet';
+  $('#tripSub').textContent=trip.place||(canEdit?'Ajoute le lieu et les dates dans Réglages.':'');
+  $('#tripMeta').textContent=`Voyage de groupe · ${people.length} personne${people.length>1?'s':''}`;
+  const amt=+trip.amount||0, paid=people.filter(p=>p.paid).length, late=deadline()&&deadline()<=Date.now();
+  $('#sPer').textContent=fmt(amt); $('#sGot').textContent=fmt(paid*amt); $('#sMiss').textContent=fmt((people.length-paid)*amt);
+  $('#paidBar').style.width=(people.length?paid/people.length*100:0)+'%';
+  $('#clockFoot').textContent=`${paid} payé${paid>1?'s':''} sur ${people.length}`;
+  $('#peopleEmpty').textContent = canEdit ? "Ajoute les amis du groupe ci-dessus, puis coche chacun quand il a payé." : "La liste du groupe apparaîtra ici dès que l'organisateur l'aura remplie.";
+  $('#peopleEmpty').hidden=people.length>0; $('#people').hidden=!people.length;
+  $('#people').innerHTML=people.map(p=>{
+    const conf=pendingDel===p.id;
+    return `<li><input type="checkbox" id="pp-${p.id}" data-pay="${p.id}" ${p.paid?'checked':''} ${canEdit?'':'disabled'} aria-label="${esc(p.name)} a payé">
+      <label class="name" for="pp-${p.id}">${esc(p.name)}</label>
+      ${conf?`<span class="confirm"><button class="btn danger" data-delp="${p.id}">Retirer</button><button class="btn" data-cancel>Annuler</button></span>`
+      :`<span class="pill ${p.paid?'ok':late?'late':'no'}">${p.paid?'Payé':late?'En retard':'À payer'}</span><button class="icon edit" data-ask="${p.id}" aria-label="Retirer ${esc(p.name)}">✕</button>`}</li>`;
+  }).join('');
+  $('#peopleNames').innerHTML=people.map(p=>`<option value="${esc(p.name)}">`).join('');
+  const sel=$('#whoSel'), cur=sel.value||store.get('who')||'';
+  sel.innerHTML='<option value="">— choisis ton nom —</option>'+people.map(p=>`<option ${p.name===cur?'selected':''}>${esc(p.name)}</option>`).join('');
+  const sum=expenses.reduce((s,e)=>s+(+e.total||0),0), n=people.length;
+  $('#eSum').textContent=fmt(sum); $('#eCount').textContent=n; $('#eShare').textContent=fmt(n?sum/n:0);
+  $('#expEmpty').hidden=expenses.length>0; $('#expenses').hidden=!expenses.length;
+  $('#expenses').innerHTML=expenses.map(e=>{const conf=pendingDel===e.id;return `<li>
+    <div class="name">${esc(e.label||'Dépense')}<div class="note">${e.payer?'Payé par '+esc(e.payer)+' · ':''}${new Date(e.createdAt).toLocaleDateString('fr-CA',{day:'numeric',month:'short'})}</div></div>
+    ${conf?`<span class="confirm"><button class="btn danger" data-dele="${e.id}">Supprimer</button><button class="btn" data-cancel>Annuler</button></span>`
+    :`<div class="exp-amt">${fmt(e.total)}<small>${n?fmt(e.total/n)+' / pers.':''}</small></div><button class="icon edit" data-ask="${e.id}" aria-label="Supprimer">✕</button>`}</li>`}).join('');
+  updateSplit();
+  if(!$('#tripForm').contains(document.activeElement)){
+    $('#fName').value=trip.name||''; $('#fPlace').value=trip.place||''; $('#fAmount').value=trip.amount||''; $('#fInterac').value=trip.interac||'';
+    if(trip.deadline){const d=new Date(trip.deadline);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());$('#fDeadline').value=d.toISOString().slice(0,16)} else $('#fDeadline').value='';
+  }
+  tick();
+}
+
+// ---------- Actions admin ----------
+document.addEventListener('click',async ev=>{
+  const b=ev.target.closest('button'); if(!b) return;
+  if(b.dataset.ask){pendingDel=b.dataset.ask;render();return}
+  if('cancel' in b.dataset){pendingDel=null;render();return}
+  if(b.dataset.delp&&guard()){pendingDel=null;try{await deleteDoc(doc(db,'people',b.dataset.delp));toast('Personne retirée')}catch(e){toast('Action refusée')}}
+  if(b.dataset.dele&&guard()){pendingDel=null;try{await deleteDoc(doc(db,'expenses',b.dataset.dele));toast('Dépense supprimée')}catch(e){toast('Action refusée')}}
+});
+document.addEventListener('change',async ev=>{
+  const id=ev.target.dataset?.pay; if(!id) return;
+  if(!guard()){ev.target.checked=!ev.target.checked;return}
+  const paid=ev.target.checked;
+  try{await updateDoc(doc(db,'people',id),{paid,paidAt:paid?new Date().toISOString():null})}catch(e){ev.target.checked=!paid;toast('Action refusée')}
+});
+$('#addPerson').onsubmit=async e=>{
+  e.preventDefault(); const name=$('#newPerson').value.trim(); if(!name||!guard()) return;
+  try{await addDoc(collection(db,'people'),{name,paid:false,createdAt:new Date().toISOString()});$('#newPerson').value='';toast(name+' ajouté')}catch(err){toast('Ajout refusé')}
+};
+$('#tripForm').onsubmit=async e=>{
+  e.preventDefault(); if(!guard()) return;
+  const dl=$('#fDeadline').value;
+  try{
+    await setDoc(doc(db,'trip','main'),{name:$('#fName').value.trim(),place:$('#fPlace').value.trim(),amount:parseFloat($('#fAmount').value)||0,
+      deadline:dl?new Date(dl).toISOString():null,interac:$('#fInterac').value.trim(),lastNotifiedAt:deleteField()},{merge:true});
+    document.activeElement.blur(); toast('Réglages enregistrés');
+  }catch(err){toast('Enregistrement refusé')}
+};
+$('#saveKey').onclick=()=>{store.set('anthropicKey',$('#apiKey').value.trim());toast('Clé enregistrée sur ce téléphone')};
+
+// ---------- Factures (IA) ----------
+function updateSplit(){ const t=parseFloat($('#eTotal').value)||0,n=people.length; $('#splitPreview').textContent=n?`${fmt(t)} ÷ ${n} personnes = ${fmt(t/n)} chacun`:'Ajoute des personnes pour diviser la facture.'; }
+$('#eTotal').oninput=updateSplit;
+$('#manual').onclick=()=>{$('#scanResult').hidden=false;$('#scanStatus').hidden=true;$('#preview').hidden=true;$('#eTotal').focus();updateSplit()};
+async function toJpegBase64(file){
+  const img=await createImageBitmap(file); const s=Math.min(1,1600/Math.max(img.width,img.height));
+  const c=document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',0.85).split(',')[1];
+}
+$('#photo').onchange=async ev=>{
+  const f=ev.target.files[0]; if(!f) return; ev.target.value='';
+  $('#preview').src=URL.createObjectURL(f); $('#preview').hidden=false;
+  $('#scanResult').hidden=false; $('#eLabel').value=''; $('#eTotal').value=''; updateSplit();
+  const st=$('#scanStatus'); st.hidden=false;
+  const key=store.get('anthropicKey');
+  if(!key){st.textContent="Ajoute ta clé API dans Réglages pour la lecture automatique, ou entre le total à la main.";return}
+  st.textContent='Lecture de la facture…';
+  try{
+    const b64=await toJpegBase64(f);
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+        {type:'text',text:'Photo d\'une facture (Québec). Réponds UNIQUEMENT avec un JSON : {"store": nom court du commerce, "total": montant final payé TAXES INCLUSES (nombre)}. Si aucun total lisible, "total": null.'}]}]})});
+    if(!r.ok) throw new Error(r.status);
+    const data=await r.json(); const txt=data.content?.[0]?.text||''; const j=JSON.parse(txt.slice(txt.indexOf('{'),txt.lastIndexOf('}')+1));
+    if(typeof j.total==='number'){ $('#eTotal').value=j.total.toFixed(2); $('#eLabel').value=j.store||'Facture'; st.textContent=`Total lu : ${fmt(j.total)}. Vérifie avant d'ajouter.`; }
+    else st.textContent="Total introuvable — entre-le à la main.";
+    updateSplit();
+  }catch(e){ st.textContent = String(e.message)==='401' ? 'Clé API invalide — vérifie-la dans Réglages.' : 'Lecture impossible — entre le total à la main.'; }
+};
+$('#saveExpense').onclick=async()=>{
+  const total=parseFloat($('#eTotal').value); if(!(total>0)){toast('Entre un total valide');return} if(!guard()) return;
+  try{await addDoc(collection(db,'expenses'),{label:$('#eLabel').value.trim()||'Facture',total,payer:$('#ePayer').value.trim(),createdAt:new Date().toISOString()});
+    $('#scanResult').hidden=true;$('#preview').hidden=true;$('#scanStatus').hidden=true;$('#ePayer').value='';toast('Dépense ajoutée')}catch(e){toast('Ajout refusé')}
+};
+
+// ---------- Installation & notifications ----------
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+let swReg=null;
+if('serviceWorker' in navigator){ swReg = await navigator.serviceWorker.register('./sw.js?cfg='+encodeURIComponent(JSON.stringify(firebaseConfig))).catch(()=>null); }
+if(isIOS && !standalone){ $('#installBox').hidden=false; }
+else if(swReg && await isSupported().catch(()=>false)){
+  const messaging=getMessaging(app);
+  onMessage(messaging,m=>toast(m.notification?.body||'Nouveau rappel'));
+  if(Notification.permission!=='granted' || !store.get('pushToken')) $('#notifBox').hidden=false;
+  else $('#notifNote').textContent='';
+  $('#whoSel').onchange=()=>store.set('who',$('#whoSel').value);
+  $('#notifBtn').onclick=async()=>{
+    $('#notifBtn').disabled=true;
+    try{
+      const perm=await Notification.requestPermission();
+      if(perm!=='granted'){ $('#notifNote').textContent='Notifications refusées. Tu peux les réactiver dans Réglages iPhone → Notifications → Chalet.'; return; }
+      const token=await getToken(messaging,{vapidKey,serviceWorkerRegistration:swReg});
+      await setDoc(doc(db,'tokens',token),{token,who:$('#whoSel').value||'',createdAt:new Date().toISOString()});
+      store.set('pushToken',token); $('#notifBox').hidden=true; toast('Notifications activées ✅');
+    }catch(e){ $('#notifNote').textContent='Activation impossible. Réessaie depuis l\'app installée.'; }
+    finally{ $('#notifBtn').disabled=false; }
+  };
+}
+</script>
+</body>
+</html>
