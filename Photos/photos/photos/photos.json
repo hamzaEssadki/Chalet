@@ -1,0 +1,83 @@
+{
+  "hero": {
+    "file": "groupe.jpg",
+    "titre": "L'équipe au complet",
+    "sous": "Morin-Heights · harnais attachés, dignité en option",
+    "w": 1000,
+    "h": 1309
+  },
+  "photos": [
+    {
+      "file": "tyrolienne-cri.jpg",
+      "prix": "Prix du cri le plus aigu",
+      "texte": "Yasser lhbil : iban kbir, mais fal tyrolienne kay ghawet b7al chi drari sghar",
+      "tag": "Tyrolienne",
+      "w": 800,
+      "h": 1321
+    },
+    {
+      "file": "fou-rire-foret.jpg",
+      "prix": "Fou rire de l'année",
+      "texte": "Ilyass ou Kawtar : l7oub ou nachate walyni rajlha 3ad balo nadi fal volley ba ya baaaaa",
+      "tag": "Randonnée",
+      "w": 800,
+      "h": 722
+    },
+    {
+      "file": "copilote.jpg",
+      "prix": "Copilote officiel",
+      "texte": "Sa3id rajol mouch ta3iss, c'est mon bb d'amour",
+      "tag": "Sur la route",
+      "w": 800,
+      "h": 1459
+    },
+    {
+      "file": "gateau.jpg",
+      "prix": "Prix du partage",
+      "texte": "Youssef packetawww brazili dyal temuawww",
+      "tag": "Anniversaire",
+      "w": 800,
+      "h": 1307
+    },
+    {
+      "file": "selfie-auto.jpg",
+      "prix": "Plus beau sourire",
+      "texte": "Yasmine ma petite autiste on ne dis pas +",
+      "tag": "Sur la route",
+      "w": 800,
+      "h": 1128
+    },
+    {
+      "file": "tyrolienne-grimace.jpg",
+      "prix": "Prix du sang-froid",
+      "texte": "Hamza : walla t9assa7t fal tasswira hadi",
+      "tag": "Tyrolienne",
+      "w": 800,
+      "h": 1384
+    },
+    {
+      "file": "selfie-blase.jpg",
+      "prix": "Prix de l'enthousiasme",
+      "texte": "Youssef jato minopose maskinnn",
+      "tag": "Cotisation",
+      "w": 800,
+      "h": 815
+    },
+    {
+      "file": "bavette.jpg",
+      "prix": "Prix de l'élégance",
+      "texte": "Yassine ki mout 3la la piscine",
+      "tag": "Resto",
+      "w": 800,
+      "h": 1276
+    },
+    {
+      "file": "saad.jpg",
+      "prix": "Pilote le plus rapide",
+      "texte": "Saad moul asra3 s5 a montreal ( miawwwwwww .... )",
+      "tag": "Tyrolienne",
+      "w": 560,
+      "h": 800
+    }
+  ]
+}
