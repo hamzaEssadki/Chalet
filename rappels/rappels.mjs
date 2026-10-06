@@ -27,33 +27,37 @@ if (!unpaid.length) { console.log("Tout le monde a payé 🎉"); process.exit(0)
 const last = trip.lastNotifiedAt ? new Date(trip.lastNotifiedAt) : null;
 if (!force && last && now - last < 23.5 * 3600e3) { console.log("Rappel déjà envoyé dans les dernières 24 h."); process.exit(0); }
 
-const verb = unpaid.length > 1 ? "n'ont" : "n'a";
-const title = `💸 ${trip.name || "Chalet"} : paiement en retard`;
-const body = expired
-  ? `${list(unpaid)} ${verb} pas payé la somme de ${fmt(trip.amount)}. Veuillez faire le paiement le plus tôt possible.`
-  : `Rappel : ${list(unpaid)} ${verb} pas encore payé ${fmt(trip.amount)}. Date limite : ${deadline ? deadline.toLocaleDateString("fr-CA", { day: "numeric", month: "long", timeZone: "America/Toronto" }) : "bientôt"}.`;
+// ✏️ Le message envoyé pour chaque personne qui n'a pas payé ({nom} = son prénom).
+const MESSAGE = "{nom} sma3 dak weld la puta, envoie le virement stp le plus rapidement possible tout le monde attends pour finaliser la facture";
 
-const tokens = (await db.collection("tokens").get()).docs.map(d => d.id);
+let tokens = (await db.collection("tokens").get()).docs.map(d => d.id);
 if (!tokens.length) { console.log("Aucun téléphone inscrit aux notifications."); process.exit(0); }
 
+// Une notification par personne non payée, envoyée à tout le monde.
 let sent = 0, removed = 0;
-for (let i = 0; i < tokens.length; i += 500) {
-  const batch = tokens.slice(i, i + 500);
-  const res = await admin.messaging().sendEachForMulticast({
-    tokens: batch,
-    webpush: {
-      notification: { title, body, icon: appUrl ? appUrl + "icon-192.png" : undefined },
-      fcmOptions: appUrl ? { link: appUrl } : undefined,
-    },
-  });
-  sent += res.successCount;
-  await Promise.all(res.responses.map((r, j) => {
-    const code = r.error?.code || "";
-    if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token") || code.includes("invalid-argument")) {
-      removed++; return db.doc("tokens/" + batch[j]).delete();
-    }
-  }));
+for (const nom of unpaid) {
+  const title = `💸 ${nom} n'a pas payé ${fmt(trip.amount)}`;
+  const body = MESSAGE.replaceAll("{nom}", nom);
+  for (let i = 0; i < tokens.length; i += 500) {
+    const batch = tokens.slice(i, i + 500);
+    const res = await admin.messaging().sendEachForMulticast({
+      tokens: batch,
+      webpush: {
+        notification: { title, body, tag: "rappel-" + nom, icon: appUrl ? appUrl + "icon-192.png" : undefined },
+        fcmOptions: appUrl ? { link: appUrl } : undefined,
+      },
+    });
+    sent += res.successCount;
+    const dead = [];
+    res.responses.forEach((r, j) => {
+      const code = r.error?.code || "";
+      if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token") || code.includes("invalid-argument")) dead.push(batch[j]);
+    });
+    await Promise.all(dead.map(t => db.doc("tokens/" + t).delete()));
+    removed += dead.length;
+    tokens = tokens.filter(t => !dead.includes(t));
+  }
+  console.log(title + " — " + body);
 }
 if (expired) await tripRef.set({ lastNotifiedAt: now.toISOString() }, { merge: true });
-console.log(`Notification envoyée à ${sent} téléphone(s). Jetons expirés retirés : ${removed}.`);
-console.log(body);
+console.log(`${unpaid.length} rappel(s) envoyé(s), ${sent} notification(s) livrée(s). Jetons expirés retirés : ${removed}.`);
