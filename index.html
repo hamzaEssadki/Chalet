@@ -294,7 +294,7 @@ function tick(){
   if(show){
     const list=namesList(unpaid.map(p=>p.name)), verb=unpaid.length>1?"n'ont":"n'a";
     $('#alertText').textContent=`${list} ${verb} pas encore payé ${fmt(trip.amount)}.`;
-    const msg=`⏰ Rappel ${trip.name||'chalet'} : la date limite est passée. ${list} ${verb} pas payé la somme de ${fmt(trip.amount)}. Veuillez faire le paiement le plus tôt possible${trip.interac?' (Interac : '+trip.interac+')':''}. Merci!`;
+    const msg=unpaid.map(p=>`${p.name} sma3 dak weld la puta, envoie le virement stp le plus rapidement possible tout le monde attends pour finaliser la facture`).join('\n')+(trip.interac?`\n(Interac : ${trip.interac})`:'');
     if($('#alertMsg').value!==msg) $('#alertMsg').value=msg;
   }
 }
