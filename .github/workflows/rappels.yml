@@ -1,13 +1,15 @@
 name: Rappels de paiement
+
 on:
   schedule:
-    - cron: "7 * * * *"
+    - cron: "*/5 * * * *"   # toutes les 5 minutes
   workflow_dispatch:
     inputs:
       force:
-        description: "Envoyer maintenant"
+        description: "Forcer aussi les rappels de paiement (même avant la date limite)"
         type: boolean
-        default: true
+        default: false
+
 jobs:
   rappel:
     runs-on: ubuntu-latest
@@ -16,10 +18,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install --no-audit --no-fund
+      - name: Installer
         working-directory: rappels
-      - run: node rappels/rappels.mjs
+        run: npm install --no-audit --no-fund
+      - name: Envoyer les rappels
+        run: node rappels/rappels.mjs
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           APP_URL: ${{ vars.APP_URL }}
           FORCE: ${{ inputs.force }}
+
