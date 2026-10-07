@@ -99,6 +99,8 @@ li.done-preview{background:var(--ok-soft)}
 .celebrate{position:fixed;left:16px;right:16px;top:calc(12px + env(safe-area-inset-top));z-index:30;max-width:560px;margin:0 auto;background:var(--pine);color:var(--pine-ink);border-radius:14px;padding:14px 40px 14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:0 14px 34px -12px rgba(0,0,0,.5)}
 .celebrate b{font-family:var(--display);font-size:1.1rem}
 .celebrate .icon{position:absolute;top:8px;right:8px;color:inherit}
+.relance{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-color:var(--amber);background:var(--amber-soft)}
+.relance>div:first-child{flex:1;min-width:200px}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -158,6 +160,10 @@ li.done-preview{background:var(--ok-soft)}
       <input id="newPerson" placeholder="Ajouter un ami" maxlength="40" autocomplete="off">
       <button class="btn primary" type="submit">Ajouter</button>
     </form>
+    <div class="card edit relance" id="relanceBox" hidden>
+      <div><b>Relancer les non-payés</b><p class="note" id="relanceInfo"></p></div>
+      <div class="confirm" id="relanceActions"></div>
+    </div>
     <ul class="list" id="people" hidden></ul>
     <div class="empty" id="peopleEmpty">La liste du groupe apparaîtra ici dès que l'organisateur l'aura remplie.</div>
   </section>
@@ -251,6 +257,9 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 let canEdit=false, trip={}, people=[], expenses=[], pendingDel=null, pendingDone=null, seenDone=null;
 const MESSAGE_FACTURE="WA L7WA tout est payé et le chalet est a nouuus, KHANASSNII";
+const MESSAGE_NON_PAYE="Safi hadchi li bghiti, chouha yallah KHANSNII";
+const MESSAGE_PAYE="{nom} Mazal mkhanassnich SPAMMER LEEE !";
+let relanceConfirm=false;
 
 // ---------- Onglets ----------
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
@@ -343,6 +352,7 @@ function render(){
     :`<div class="exp-amt">${fmt(e.total)}<small>${n?fmt(e.total/n)+' / pers.':''}</small></div>${e.completed?'<span class="pill ok">Complétée</span>':`<button class="btn edit done-btn" data-askdone="${e.id}">Complétée</button>`}<button class="icon edit" data-ask="${e.id}" aria-label="Supprimer">✕</button>`}</li>
     ${done?`<li class="done-preview edit"><span class="note">Notification envoyée à tout le monde : <b>✅ ${esc(e.label||'Facture')} : complétée !</b> — ${esc(MESSAGE_FACTURE)}</span></li>`:''}`}).join('');
   updateSplit();
+  renderRelance();
   if(!$('#tripForm').contains(document.activeElement)){
     $('#fName').value=trip.name||''; $('#fPlace').value=trip.place||''; $('#fAmount').value=trip.amount||''; $('#fInterac').value=trip.interac||'';
     if(trip.deadline){const d=new Date(trip.deadline);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());$('#fDeadline').value=d.toISOString().slice(0,16)} else $('#fDeadline').value='';
@@ -358,12 +368,32 @@ function celebrate(e){
   box.hidden=false; clearTimeout(celebrate.t); celebrate.t=setTimeout(()=>box.hidden=true,12000);
 }
 
+// ---------- Relance des non-payés (admin) ----------
+function renderRelance(){
+  const unpaid=people.filter(p=>!p.paid);
+  $('#relanceBox').hidden=!canEdit || !people.length;
+  if(!unpaid.length){ $('#relanceInfo').textContent='Tout le monde a payé 🎉'; $('#relanceActions').innerHTML=''; return; }
+  if(relanceConfirm){
+    $('#relanceInfo').innerHTML=`<b>${unpaid.length} non-payé(s)</b> reçoivent : « ${esc(MESSAGE_NON_PAYE)} »<br>Les autres reçoivent, pour chacun : « ${esc(MESSAGE_PAYE.replace('{nom}',unpaid[0].name))} »`;
+    $('#relanceActions').innerHTML='<button class="btn primary" type="button" data-relance>Confirmer l\'envoi</button><button class="btn" type="button" data-cancel>Annuler</button>';
+  } else {
+    $('#relanceInfo').textContent='Non payés : '+unpaid.map(p=>p.name).join(', ');
+    $('#relanceActions').innerHTML='<button class="btn primary" type="button" data-relanceask>Envoyer la relance</button>';
+  }
+}
+
 // ---------- Actions admin ----------
 document.addEventListener('click',async ev=>{
   const b=ev.target.closest('button'); if(!b) return;
   if(b.dataset.ask){pendingDel=b.dataset.ask;pendingDone=null;render();return}
   if(b.dataset.askdone){pendingDone=b.dataset.askdone;pendingDel=null;render();return}
-  if('cancel' in b.dataset){pendingDel=null;pendingDone=null;render();return}
+  if('cancel' in b.dataset){pendingDel=null;pendingDone=null;relanceConfirm=false;render();return}
+  if('relanceask' in b.dataset){relanceConfirm=true;render();return}
+  if('relance' in b.dataset&&guard()){
+    relanceConfirm=false; render();
+    try{ await addDoc(collection(db,'announcements'),{type:'relance',createdAt:new Date().toISOString(),sentAt:null}); toast('Relance en route (quelques minutes)'); }
+    catch(err){ toast('Envoi refusé — vérifie la règle « announcements » dans Firestore'); }
+  }
   if(b.dataset.done&&guard()){
     const e=expenses.find(x=>x.id===b.dataset.done); pendingDone=null; render(); if(!e) return;
     try{
@@ -444,17 +474,19 @@ if(isIOS && !standalone){ $('#installBox').hidden=false; }
 else if(swReg && await isSupported().catch(()=>false)){
   const messaging=getMessaging(app);
   onMessage(messaging,m=>toast(m.notification?.body||'Nouveau rappel'));
-  if(Notification.permission!=='granted' || !store.get('pushToken')) $('#notifBox').hidden=false;
+  if(Notification.permission!=='granted' || !store.get('pushToken') || !store.get('who')){ $('#notifBox').hidden=false;
+    if(Notification.permission==='granted' && store.get('pushToken')){ $('#notifBtn').textContent='Enregistrer mon nom'; $('#notifNote').textContent='Choisis ton nom pour recevoir les bons rappels.'; } }
   else $('#notifNote').textContent='';
   $('#whoSel').onchange=()=>store.set('who',$('#whoSel').value);
   $('#notifBtn').onclick=async()=>{
+    if(!$('#whoSel').value){ $('#notifNote').textContent='Choisis d\'abord ton nom dans la liste.'; return; }
     $('#notifBtn').disabled=true;
     try{
       const perm=await Notification.requestPermission();
       if(perm!=='granted'){ $('#notifNote').textContent='Notifications refusées. Tu peux les réactiver dans Réglages iPhone → Notifications → Chalet.'; return; }
       const token=await getToken(messaging,{vapidKey,serviceWorkerRegistration:swReg});
       await setDoc(doc(db,'tokens',token),{token,who:$('#whoSel').value||'',createdAt:new Date().toISOString()});
-      store.set('pushToken',token); $('#notifBox').hidden=true; toast('Notifications activées ✅');
+      store.set('pushToken',token); store.set('who',$('#whoSel').value); $('#notifBox').hidden=true; toast('Notifications activées ✅');
     }catch(e){ $('#notifNote').textContent='Activation impossible. Réessaie depuis l\'app installée.'; }
     finally{ $('#notifBtn').disabled=false; }
   };
