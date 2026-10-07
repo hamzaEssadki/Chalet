@@ -101,6 +101,13 @@ li.done-preview{background:var(--ok-soft)}
 .celebrate .icon{position:absolute;top:8px;right:8px;color:inherit}
 .relance{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-color:var(--amber);background:var(--amber-soft)}
 .relance>div:first-child{flex:1;min-width:200px}
+.me{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.me-ask{display:flex;flex-direction:column;gap:6px}
+.me-ask .row{display:flex;gap:8px}.me-ask select{flex:1;min-width:0}
+.me-done{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.me-done>span:first-child{flex:1;min-width:0}
+.me-state{font-size:.82rem;color:var(--muted)}
+.me .note:empty{display:none}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -135,10 +142,21 @@ li.done-preview{background:var(--ok-soft)}
     <strong>Installe l'app sur ton iPhone</strong>
     <p class="note">Dans Safari, touche le bouton Partager <b>⎋</b>, puis « Sur l'écran d'accueil ». Ouvre ensuite l'app depuis l'icône pour activer les notifications.</p>
   </section>
-  <section class="banner" id="notifBox" hidden>
-    <strong>Recevoir les rappels de paiement</strong>
-    <div class="field"><label for="whoSel">Je suis</label><select id="whoSel"><option value="">— choisis ton nom —</option></select></div>
-    <button class="btn primary" id="notifBtn" type="button">Activer les notifications</button>
+  <section class="me" id="meBox" hidden>
+    <div class="me-ask" id="meAsk">
+      <b>Qui es-tu ?</b>
+      <p class="note">Choisis ton nom une seule fois pour recevoir les bons rappels sur ce téléphone.</p>
+      <div class="row"><select id="whoSel" aria-label="Ton nom"><option value="">— choisis ton nom —</option></select>
+      <button class="btn primary" id="meSave" type="button">C'est moi</button></div>
+    </div>
+    <div class="me-done" id="meDone" hidden>
+      <span>📱 Ce téléphone : <b id="meName"></b></span>
+      <span class="me-state" id="meState"></span>
+      <button class="btn" id="meChange" type="button">Changer</button>
+    </div>
+    <div class="me-notif" id="meNotif" hidden>
+      <button class="btn primary" id="notifBtn" type="button">Activer les notifications</button>
+    </div>
     <p class="note" id="notifNote"></p>
   </section>
 
@@ -161,7 +179,7 @@ li.done-preview{background:var(--ok-soft)}
       <button class="btn primary" type="submit">Ajouter</button>
     </form>
     <div class="card edit relance" id="relanceBox" hidden>
-      <div><b>Relancer les non-payés</b><p class="note" id="relanceInfo"></p></div>
+      <div><b>Relancer les non-payés</b><p class="note" id="relanceInfo"></p><p class="note" id="phonesInfo"></p></div>
       <div class="confirm" id="relanceActions"></div>
     </div>
     <ul class="list" id="people" hidden></ul>
@@ -256,6 +274,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 let canEdit=false, trip={}, people=[], expenses=[], pendingDel=null, pendingDone=null, seenDone=null;
+let swReg=null, messaging=null, pushReady=false, editingMe=false, phones=null, unsubPhones=null;
 const MESSAGE_FACTURE="WA L7WA tout est payé et le chalet est a nouuus, KHANASSNII";
 const MESSAGE_NON_PAYE="Safi hadchi li bghiti, chouha yallah KHANSNII";
 const MESSAGE_PAYE="{nom} Mazal mkhanassnich SPAMMER LEEE !";
@@ -282,6 +301,8 @@ onAuthStateChanged(auth,u=>{
   $('#adminLink').hidden=canEdit;
   if(canEdit){ const t=store.get('tab'); if(t) $('#t-'+t)?.click(); } else if(!$('#p-set').hidden) $('#t-pay').click();
   $('#apiKey').value=store.get('anthropicKey')||'';
+  if(canEdit && !unsubPhones){ unsubPhones=onSnapshot(collection(db,'tokens'), s=>{phones=s.docs.map(d=>String(d.data().who||'').trim());render()}, ()=>{phones=null}); }
+  if(!canEdit && unsubPhones){ unsubPhones(); unsubPhones=null; phones=null; }
   render();
 });
 function guard(){ if(!canEdit){toast("Seul l'organisateur peut modifier");return false} return true }
@@ -340,8 +361,7 @@ function render(){
       :`<span class="pill ${p.paid?'ok':late?'late':'no'}">${p.paid?'Payé':late?'En retard':'À payer'}</span><button class="icon edit" data-ask="${p.id}" aria-label="Retirer ${esc(p.name)}">✕</button>`}</li>`;
   }).join('');
   $('#peopleNames').innerHTML=people.map(p=>`<option value="${esc(p.name)}">`).join('');
-  const sel=$('#whoSel'), cur=sel.value||store.get('who')||'';
-  sel.innerHTML='<option value="">— choisis ton nom —</option>'+people.map(p=>`<option ${p.name===cur?'selected':''}>${esc(p.name)}</option>`).join('');
+  renderMe();
   const sum=expenses.reduce((s,e)=>s+(+e.total||0),0), n=people.length;
   $('#eSum').textContent=fmt(sum); $('#eCount').textContent=n; $('#eShare').textContent=fmt(n?sum/n:0);
   $('#expEmpty').hidden=expenses.length>0; $('#expenses').hidden=!expenses.length;
@@ -372,6 +392,12 @@ function celebrate(e){
 function renderRelance(){
   const unpaid=people.filter(p=>!p.paid);
   $('#relanceBox').hidden=!canEdit || !people.length;
+  if(phones){
+    const named=new Set(phones.filter(Boolean).map(n=>n.toLowerCase()));
+    const noName=phones.filter(n=>!n).length;
+    const missing=people.filter(p=>!named.has(String(p.name).trim().toLowerCase())).map(p=>p.name);
+    $('#phonesInfo').innerHTML=`📱 ${phones.length} téléphone(s) inscrit(s)`+(noName?` · <b>${noName} sans nom</b> (reçoivent le message « payé »)`:'')+(missing.length?`<br>Pas encore inscrits : ${esc(missing.join(', '))}`:'<br>Tout le monde est inscrit ✅');
+  } else $('#phonesInfo').textContent='';
   if(!unpaid.length){ $('#relanceInfo').textContent='Tout le monde a payé 🎉'; $('#relanceActions').innerHTML=''; return; }
   if(relanceConfirm){
     $('#relanceInfo').innerHTML=`<b>${unpaid.length} non-payé(s)</b> reçoivent : « ${esc(MESSAGE_NON_PAYE)} »<br>Les autres reçoivent, pour chacun : « ${esc(MESSAGE_PAYE.replace('{nom}',unpaid[0].name))} »`;
@@ -465,32 +491,67 @@ $('#saveExpense').onclick=async()=>{
     $('#scanResult').hidden=true;$('#preview').hidden=true;$('#scanStatus').hidden=true;$('#ePayer').value='';toast('Dépense ajoutée')}catch(e){toast('Ajout refusé')}
 };
 
-// ---------- Installation & notifications ----------
+// ---------- Qui es-tu ? + notifications ----------
+// Chaque téléphone a son propre identifiant de notification (le « jeton »).
+// On l'enregistre dans Firestore avec le nom choisi : le script sait ainsi qui reçoit quel message.
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-let swReg=null;
+
+function renderMe(){
+  const box=$('#meBox'); if(!box) return;
+  box.hidden=!people.length;
+  const who=store.get('who')||'';
+  const known=who && people.some(p=>p.name===who);
+  const sel=$('#whoSel'), cur=sel.value||who;
+  sel.innerHTML='<option value="">— choisis ton nom —</option>'+people.map(p=>`<option ${p.name===cur?'selected':''}>${esc(p.name)}</option>`).join('');
+  const asking=!known||editingMe;
+  $('#meAsk').hidden=!asking; $('#meDone').hidden=asking;
+  if(known){
+    $('#meName').textContent=who;
+    const on=pushReady && Notification.permission==='granted' && store.get('pushToken');
+    $('#meState').textContent= on ? '· notifications activées ✅' : '';
+    $('#meNotif').hidden = asking || !pushReady || !!on;
+  } else $('#meNotif').hidden=true;
+}
+
+// Enregistre (ou met à jour) le jeton de ce téléphone avec le nom choisi.
+async function saveToken(){
+  const who=store.get('who')||'';
+  const token=await getToken(messaging,{vapidKey,serviceWorkerRegistration:swReg});
+  await setDoc(doc(db,'tokens',token),{token,who,createdAt:new Date().toISOString()});
+  store.set('pushToken',token);
+}
+
+$('#meSave').onclick=async()=>{
+  const name=$('#whoSel').value;
+  if(!name){ $('#notifNote').textContent='Choisis ton nom dans la liste.'; return; }
+  store.set('who',name); editingMe=false; $('#notifNote').textContent='';
+  if(pushReady && Notification.permission==='granted'){
+    try{ await saveToken(); toast(`C'est noté, ${name} ✅`); }catch(e){ $('#notifNote').textContent='Nom gardé, mais la mise à jour a échoué. Réessaie.'; }
+  } else if(isIOS && !standalone){ $('#notifNote').textContent="Installe l'app sur l'écran d'accueil pour recevoir les notifications."; }
+  renderMe();
+};
+$('#meChange').onclick=()=>{ editingMe=true; renderMe(); $('#whoSel').focus(); };
+$('#notifBtn').onclick=async()=>{
+  if(!store.get('who')){ editingMe=true; renderMe(); return; }
+  $('#notifBtn').disabled=true;
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ $('#notifNote').textContent='Notifications refusées. Réactive-les dans Réglages iPhone → Notifications → Chalet.'; return; }
+    await saveToken(); $('#notifNote').textContent=''; toast('Notifications activées ✅');
+  }catch(e){ $('#notifNote').textContent="Activation impossible. Ouvre l'app depuis l'icône de l'écran d'accueil."; }
+  finally{ $('#notifBtn').disabled=false; renderMe(); }
+};
+
 if('serviceWorker' in navigator){ swReg = await navigator.serviceWorker.register('./sw.js?cfg='+encodeURIComponent(JSON.stringify(firebaseConfig))).catch(()=>null); }
 if(isIOS && !standalone){ $('#installBox').hidden=false; }
 else if(swReg && await isSupported().catch(()=>false)){
-  const messaging=getMessaging(app);
+  messaging=getMessaging(app); pushReady=true;
   onMessage(messaging,m=>toast(m.notification?.body||'Nouveau rappel'));
-  if(Notification.permission!=='granted' || !store.get('pushToken') || !store.get('who')){ $('#notifBox').hidden=false;
-    if(Notification.permission==='granted' && store.get('pushToken')){ $('#notifBtn').textContent='Enregistrer mon nom'; $('#notifNote').textContent='Choisis ton nom pour recevoir les bons rappels.'; } }
-  else $('#notifNote').textContent='';
-  $('#whoSel').onchange=()=>store.set('who',$('#whoSel').value);
-  $('#notifBtn').onclick=async()=>{
-    if(!$('#whoSel').value){ $('#notifNote').textContent='Choisis d\'abord ton nom dans la liste.'; return; }
-    $('#notifBtn').disabled=true;
-    try{
-      const perm=await Notification.requestPermission();
-      if(perm!=='granted'){ $('#notifNote').textContent='Notifications refusées. Tu peux les réactiver dans Réglages iPhone → Notifications → Chalet.'; return; }
-      const token=await getToken(messaging,{vapidKey,serviceWorkerRegistration:swReg});
-      await setDoc(doc(db,'tokens',token),{token,who:$('#whoSel').value||'',createdAt:new Date().toISOString()});
-      store.set('pushToken',token); store.set('who',$('#whoSel').value); $('#notifBox').hidden=true; toast('Notifications activées ✅');
-    }catch(e){ $('#notifNote').textContent='Activation impossible. Réessaie depuis l\'app installée.'; }
-    finally{ $('#notifBtn').disabled=false; }
-  };
+  // Téléphone déjà inscrit : on resynchronise son nom (corrige les jetons enregistrés sans nom).
+  if(Notification.permission==='granted' && store.get('who')){ saveToken().catch(()=>{}); }
 }
+renderMe();
 </script>
 </body>
 </html>
