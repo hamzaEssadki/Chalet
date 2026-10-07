@@ -1,5 +1,6 @@
-// Envoie la notification « X n'a pas payé » à tous les téléphones inscrits.
-// Lancé chaque heure par GitHub Actions (.github/workflows/rappels.yml).
+// 1) Envoie les annonces « facture complétée » demandées par l'organisateur dans l'app.
+// 2) Envoie la notification « X n'a pas payé » à tous les téléphones inscrits.
+// Lancé toutes les 5 minutes par GitHub Actions (.github/workflows/rappels.yml).
 // - Après la date limite : 1 rappel, puis 1 par 24 h tant que quelqu'un n'a pas payé.
 // - FORCE=true (bouton « Run workflow ») : envoie tout de suite, même avant la date limite.
 import admin from "firebase-admin";
@@ -13,6 +14,48 @@ const appUrl = process.env.APP_URL || "";
 const fmt = n => new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD" }).format(n || 0);
 const list = a => a.length > 1 ? a.slice(0, -1).join(", ") + " et " + a.at(-1) : a[0];
 
+// ✏️ Le message envoyé quand l'organisateur marque une facture comme complétée.
+const MESSAGE_FACTURE = "WA L7WA tout est payé et le chalet est a nouuus, KHANASSNII";
+
+let tokens = (await db.collection("tokens").get()).docs.map(d => d.id);
+let removed = 0;
+
+// Envoie une notification à tous les téléphones inscrits ; retire les jetons expirés.
+async function sendToAll(title, body, tag) {
+  let sent = 0;
+  for (let i = 0; i < tokens.length; i += 500) {
+    const batch = tokens.slice(i, i + 500);
+    const res = await admin.messaging().sendEachForMulticast({
+      tokens: batch,
+      webpush: {
+        notification: { title, body, tag, icon: appUrl ? appUrl + "icon-192.png" : undefined },
+        fcmOptions: appUrl ? { link: appUrl } : undefined,
+      },
+    });
+    sent += res.successCount;
+    const dead = [];
+    res.responses.forEach((r, j) => {
+      const code = r.error?.code || "";
+      if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token") || code.includes("invalid-argument")) dead.push(batch[j]);
+    });
+    await Promise.all(dead.map(t => db.doc("tokens/" + t).delete()));
+    removed += dead.length;
+    tokens = tokens.filter(t => !dead.includes(t));
+  }
+  return sent;
+}
+
+// ---------- 1) Annonces « facture complétée » ----------
+const pending = await db.collection("announcements").where("sentAt", "==", null).get();
+for (const a of pending.docs) {
+  const d = a.data();
+  const title = `✅ ${d.label || "Facture"} : complétée !`;
+  const n = tokens.length ? await sendToAll(title, MESSAGE_FACTURE, "facture-" + a.id) : 0;
+  await a.ref.update({ sentAt: new Date().toISOString(), delivered: n });
+  console.log(`${title} — ${MESSAGE_FACTURE} (${n} téléphone(s))`);
+}
+
+// ---------- 2) Rappels de paiement ----------
 const tripRef = db.doc("trip/main");
 const trip = (await tripRef.get()).data() || {};
 const now = new Date();
@@ -30,33 +73,14 @@ if (!force && last && now - last < 23.5 * 3600e3) { console.log("Rappel déjà e
 // ✏️ Le message envoyé pour chaque personne qui n'a pas payé ({nom} = son prénom).
 const MESSAGE = "{nom} sma3 dak weld la puta, envoie le virement stp le plus rapidement possible tout le monde attends pour finaliser la facture";
 
-let tokens = (await db.collection("tokens").get()).docs.map(d => d.id);
 if (!tokens.length) { console.log("Aucun téléphone inscrit aux notifications."); process.exit(0); }
 
 // Une notification par personne non payée, envoyée à tout le monde.
-let sent = 0, removed = 0;
+let sent = 0;
 for (const nom of unpaid) {
   const title = `💸 ${nom} n'a pas payé ${fmt(trip.amount)}`;
   const body = MESSAGE.replaceAll("{nom}", nom);
-  for (let i = 0; i < tokens.length; i += 500) {
-    const batch = tokens.slice(i, i + 500);
-    const res = await admin.messaging().sendEachForMulticast({
-      tokens: batch,
-      webpush: {
-        notification: { title, body, tag: "rappel-" + nom, icon: appUrl ? appUrl + "icon-192.png" : undefined },
-        fcmOptions: appUrl ? { link: appUrl } : undefined,
-      },
-    });
-    sent += res.successCount;
-    const dead = [];
-    res.responses.forEach((r, j) => {
-      const code = r.error?.code || "";
-      if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token") || code.includes("invalid-argument")) dead.push(batch[j]);
-    });
-    await Promise.all(dead.map(t => db.doc("tokens/" + t).delete()));
-    removed += dead.length;
-    tokens = tokens.filter(t => !dead.includes(t));
-  }
+  sent += await sendToAll(title, body, "rappel-" + nom);
   console.log(title + " — " + body);
 }
 if (expired) await tripRef.set({ lastNotifiedAt: now.toISOString() }, { merge: true });
