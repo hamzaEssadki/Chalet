@@ -93,6 +93,12 @@ textarea{width:100%;font:14px var(--body);padding:10px;border-radius:10px;border
 body.ro .edit{display:none!important}
 .foot{text-align:center}
 .foot button{background:none;border:0;color:var(--muted);font:.8rem var(--body);text-decoration:underline;cursor:pointer}
+.done-btn{padding:5px 9px;font-size:.75rem;white-space:nowrap}
+ul.list li.done .name{opacity:.75}
+li.done-preview{background:var(--ok-soft)}
+.celebrate{position:fixed;left:16px;right:16px;top:calc(12px + env(safe-area-inset-top));z-index:30;max-width:560px;margin:0 auto;background:var(--pine);color:var(--pine-ink);border-radius:14px;padding:14px 40px 14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:0 14px 34px -12px rgba(0,0,0,.5)}
+.celebrate b{font-family:var(--display);font-size:1.1rem}
+.celebrate .icon{position:absolute;top:8px;right:8px;color:inherit}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -218,12 +224,13 @@ body.ro .edit{display:none!important}
   </section>
   <div class="foot"><button type="button" id="adminLink">Accès organisateur</button></div>
 </div>
+<div class="celebrate" id="celebrate" hidden role="status"><b id="celebrateTitle"></b><span id="celebrateMsg"></span><button type="button" class="icon" aria-label="Fermer" onclick="this.parentNode.hidden=true">✕</button></div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="gallery.js" defer></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, deleteField, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 import { firebaseConfig, vapidKey } from "./config.js";
@@ -242,7 +249,8 @@ if (firebaseConfig.apiKey === "COLLE_ICI") {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-let canEdit=false, trip={}, people=[], expenses=[], pendingDel=null;
+let canEdit=false, trip={}, people=[], expenses=[], pendingDel=null, pendingDone=null, seenDone=null;
+const MESSAGE_FACTURE="WA L7WA tout est payé et le chalet est a nouuus, KHANASSNII";
 
 // ---------- Onglets ----------
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
@@ -273,7 +281,10 @@ function guard(){ if(!canEdit){toast("Seul l'organisateur peut modifier");return
 const onErr = () => toast('Connexion perdue — vérifie Internet');
 onSnapshot(doc(db,'trip','main'), s=>{trip=s.exists()?s.data():{};render()}, onErr);
 onSnapshot(query(collection(db,'people'),orderBy('createdAt')), s=>{people=s.docs.map(d=>({id:d.id,...d.data()}));render()}, onErr);
-onSnapshot(query(collection(db,'expenses'),orderBy('createdAt','desc')), s=>{expenses=s.docs.map(d=>({id:d.id,...d.data()}));render()}, onErr);
+onSnapshot(query(collection(db,'expenses'),orderBy('createdAt','desc')), s=>{expenses=s.docs.map(d=>({id:d.id,...d.data()}));
+  const done=new Set(expenses.filter(e=>e.completed).map(e=>e.id));
+  if(seenDone){ const fresh=expenses.find(e=>e.completed&&!seenDone.has(e.id)); if(fresh) celebrate(fresh); }
+  seenDone=done; render()}, onErr);
 
 // ---------- Compte à rebours ----------
 const deadline = () => trip.deadline ? new Date(trip.deadline) : null;
@@ -325,10 +336,12 @@ function render(){
   const sum=expenses.reduce((s,e)=>s+(+e.total||0),0), n=people.length;
   $('#eSum').textContent=fmt(sum); $('#eCount').textContent=n; $('#eShare').textContent=fmt(n?sum/n:0);
   $('#expEmpty').hidden=expenses.length>0; $('#expenses').hidden=!expenses.length;
-  $('#expenses').innerHTML=expenses.map(e=>{const conf=pendingDel===e.id;return `<li>
+  $('#expenses').innerHTML=expenses.map(e=>{const conf=pendingDel===e.id, done=pendingDone===e.id;return `<li${e.completed?' class="done"':''}>
     <div class="name">${esc(e.label||'Dépense')}<div class="note">${e.payer?'Payé par '+esc(e.payer)+' · ':''}${new Date(e.createdAt).toLocaleDateString('fr-CA',{day:'numeric',month:'short'})}</div></div>
     ${conf?`<span class="confirm"><button class="btn danger" data-dele="${e.id}">Supprimer</button><button class="btn" data-cancel>Annuler</button></span>`
-    :`<div class="exp-amt">${fmt(e.total)}<small>${n?fmt(e.total/n)+' / pers.':''}</small></div><button class="icon edit" data-ask="${e.id}" aria-label="Supprimer">✕</button>`}</li>`}).join('');
+    :done?`<span class="confirm"><button class="btn primary" data-done="${e.id}">Envoyer à tous</button><button class="btn" data-cancel>Annuler</button></span>`
+    :`<div class="exp-amt">${fmt(e.total)}<small>${n?fmt(e.total/n)+' / pers.':''}</small></div>${e.completed?'<span class="pill ok">Complétée</span>':`<button class="btn edit done-btn" data-askdone="${e.id}">Complétée</button>`}<button class="icon edit" data-ask="${e.id}" aria-label="Supprimer">✕</button>`}</li>
+    ${done?`<li class="done-preview edit"><span class="note">Notification envoyée à tout le monde : <b>✅ ${esc(e.label||'Facture')} : complétée !</b> — ${esc(MESSAGE_FACTURE)}</span></li>`:''}`}).join('');
   updateSplit();
   if(!$('#tripForm').contains(document.activeElement)){
     $('#fName').value=trip.name||''; $('#fPlace').value=trip.place||''; $('#fAmount').value=trip.amount||''; $('#fInterac').value=trip.interac||'';
@@ -337,11 +350,30 @@ function render(){
   tick();
 }
 
+// ---------- Facture complétée (bannière pour les apps ouvertes) ----------
+function celebrate(e){
+  const box=$('#celebrate'); if(!box) return;
+  $('#celebrateTitle').textContent=`✅ ${e.label||'Facture'} : complétée !`;
+  $('#celebrateMsg').textContent=MESSAGE_FACTURE;
+  box.hidden=false; clearTimeout(celebrate.t); celebrate.t=setTimeout(()=>box.hidden=true,12000);
+}
+
 // ---------- Actions admin ----------
 document.addEventListener('click',async ev=>{
   const b=ev.target.closest('button'); if(!b) return;
-  if(b.dataset.ask){pendingDel=b.dataset.ask;render();return}
-  if('cancel' in b.dataset){pendingDel=null;render();return}
+  if(b.dataset.ask){pendingDel=b.dataset.ask;pendingDone=null;render();return}
+  if(b.dataset.askdone){pendingDone=b.dataset.askdone;pendingDel=null;render();return}
+  if('cancel' in b.dataset){pendingDel=null;pendingDone=null;render();return}
+  if(b.dataset.done&&guard()){
+    const e=expenses.find(x=>x.id===b.dataset.done); pendingDone=null; render(); if(!e) return;
+    try{
+      const now=new Date().toISOString(), batch=writeBatch(db);
+      batch.update(doc(db,'expenses',e.id),{completed:true,completedAt:now});
+      batch.set(doc(collection(db,'announcements')),{expenseId:e.id,label:e.label||'Facture',createdAt:now,sentAt:null});
+      await batch.commit();
+      toast('Notification en route (quelques minutes)');
+    }catch(err){toast("Envoi refusé — ajoute la règle « announcements » dans Firestore")}
+  }
   if(b.dataset.delp&&guard()){pendingDel=null;try{await deleteDoc(doc(db,'people',b.dataset.delp));toast('Personne retirée')}catch(e){toast('Action refusée')}}
   if(b.dataset.dele&&guard()){pendingDel=null;try{await deleteDoc(doc(db,'expenses',b.dataset.dele));toast('Dépense supprimée')}catch(e){toast('Action refusée')}}
 });
