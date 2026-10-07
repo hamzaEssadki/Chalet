@@ -17,14 +17,21 @@ const list = a => a.length > 1 ? a.slice(0, -1).join(", ") + " et " + a.at(-1) :
 // ✏️ Le message envoyé quand l'organisateur marque une facture comme complétée.
 const MESSAGE_FACTURE = "WA L7WA tout est payé et le chalet est a nouuus, KHANASSNII";
 
-let tokens = (await db.collection("tokens").get()).docs.map(d => d.id);
+// ✏️ Messages de la relance manuelle (bouton « Envoyer la relance » dans l'app).
+const MESSAGE_NON_PAYE = "Safi hadchi li bghiti, chouha yallah KHANSNII";       // reçu par les non-payés
+const MESSAGE_PAYE = "{nom} Mazal mkhanassnich SPAMMER LEEE !";                // reçu par les autres, une fois par non-payé
+
+const tokenDocs = (await db.collection("tokens").get()).docs.map(d => ({ id: d.id, who: String(d.data().who || "").trim().toLowerCase() }));
+let tokens = tokenDocs.map(t => t.id);
 let removed = 0;
 
 // Envoie une notification à tous les téléphones inscrits ; retire les jetons expirés.
-async function sendToAll(title, body, tag) {
+async function sendToAll(title, body, tag) { return sendTo(tokens, title, body, tag); }
+async function sendTo(list, title, body, tag) {
   let sent = 0;
-  for (let i = 0; i < tokens.length; i += 500) {
-    const batch = tokens.slice(i, i + 500);
+  list = list.filter(t => tokens.includes(t));
+  for (let i = 0; i < list.length; i += 500) {
+    const batch = list.slice(i, i + 500);
     const res = await admin.messaging().sendEachForMulticast({
       tokens: batch,
       webpush: {
@@ -49,6 +56,21 @@ async function sendToAll(title, body, tag) {
 const pending = await db.collection("announcements").where("sentAt", "==", null).get();
 for (const a of pending.docs) {
   const d = a.data();
+  if (d.type === "relance") {
+    const people = (await db.collection("people").get()).docs.map(x => x.data());
+    const unpaidNames = people.filter(p => !p.paid).map(p => String(p.name || "").trim()).filter(Boolean);
+    const unpaidKeys = new Set(unpaidNames.map(n => n.toLowerCase()));
+    const toUnpaid = tokenDocs.filter(t => unpaidKeys.has(t.who)).map(t => t.id);
+    const toOthers = tokenDocs.filter(t => !unpaidKeys.has(t.who)).map(t => t.id);
+    let n = 0;
+    if (unpaidNames.length) {
+      n += await sendTo(toUnpaid, "💸 Rappel de paiement", MESSAGE_NON_PAYE, "relance-moi");
+      for (const nom of unpaidNames) n += await sendTo(toOthers, `💸 ${nom} n'a pas encore payé`, MESSAGE_PAYE.replaceAll("{nom}", nom), "relance-" + nom);
+    }
+    await a.ref.update({ sentAt: new Date().toISOString(), delivered: n });
+    console.log(`Relance : ${unpaidNames.join(", ") || "personne"} — ${toUnpaid.length} téléphone(s) non-payé(s), ${toOthers.length} autre(s), ${n} notification(s)`);
+    continue;
+  }
   const title = `✅ ${d.label || "Facture"} : complétée !`;
   const n = tokens.length ? await sendToAll(title, MESSAGE_FACTURE, "facture-" + a.id) : 0;
   await a.ref.update({ sentAt: new Date().toISOString(), delivered: n });
